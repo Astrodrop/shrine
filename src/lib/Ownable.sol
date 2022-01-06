@@ -2,9 +2,7 @@
 
 pragma solidity ^0.8.11;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-
-abstract contract Ownable is Initializable {
+abstract contract Ownable {
     error Ownable_NotOwner();
     error Ownable_NewOwnerZeroAddress();
 
@@ -16,7 +14,7 @@ abstract contract Ownable is Initializable {
     );
 
     /// @dev Initializes the contract setting the deployer as the initial owner.
-    function __Ownable_init(address initialOwner) internal onlyInitializing {
+    function __Ownable_init(address initialOwner) internal {
         _transferOwnership(initialOwner);
     }
 

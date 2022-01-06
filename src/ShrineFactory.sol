@@ -30,9 +30,9 @@ contract ShrineFactory {
     );
 
     /// @notice The Shrine template contract used by the minimal proxies
-    address public immutable shrineTemplate;
+    Shrine public immutable shrineTemplate;
 
-    constructor(address shrineTemplate_) {
+    constructor(Shrine shrineTemplate_) {
         shrineTemplate = shrineTemplate_;
     }
 
@@ -43,7 +43,7 @@ contract ShrineFactory {
         external
         returns (Shrine shrine)
     {
-        shrine = Shrine(shrineTemplate.clone());
+        shrine = Shrine(address(shrineTemplate).clone());
 
         shrine.initialize(guardian, ledger);
 
@@ -60,7 +60,7 @@ contract ShrineFactory {
         Shrine.Ledger calldata ledger,
         bytes32 salt
     ) external returns (Shrine shrine) {
-        shrine = Shrine(shrineTemplate.cloneDeterministic(salt));
+        shrine = Shrine(address(shrineTemplate).cloneDeterministic(salt));
 
         shrine.initialize(guardian, ledger);
 

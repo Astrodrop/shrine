@@ -22,6 +22,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Ownable} from "./lib/Ownable.sol";
+import {Initializable} from "./lib/Initializable.sol";
 import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
 /// @title Shrine
@@ -29,7 +30,7 @@ import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 /// offer any ERC-20 tokens to the Shrine in order to distribute them to the Champions proportional to their
 /// shares. A Champion transfer their right to claim all future tokens offered to
 /// the Champion to another address.
-contract Shrine is Ownable, ReentrancyGuard {
+contract Shrine is Ownable, ReentrancyGuard, Initializable {
     error Shrine_InputArraysLengthMismatch();
     error Shrine_NotAuthorized();
     error Shrine_InvalidMerkleProof();
