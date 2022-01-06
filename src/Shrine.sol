@@ -146,6 +146,48 @@ contract Shrine is Ownable, ReentrancyGuard {
         emit Offer(msg.sender, token, amount);
     }
 
+    /// @notice Offer multiple ERC-20 tokens to the Shrine and distribute them to Champions proportional
+    /// to their shares in the Shrine. The input arrays must be of the same length. Callable by anyone.
+    /// @param versionList The list of ledger versions to distribute to
+    /// @param tokenList The list of ERC-20 tokens being offered to the Shrine
+    /// @param amountList The list of amounts of tokens to offer
+    function offerMultiple(
+        Version[] calldata versionList,
+        ERC20[] calldata tokenList,
+        uint256[] calldata amountList
+    ) external {
+        // -------------------------------------------------------------------
+        // Validation
+        // -------------------------------------------------------------------
+
+        if (
+            versionList.length != tokenList.length ||
+            versionList.length != amountList.length
+        ) {
+            revert Shrine_InputArraysLengthMismatch();
+        }
+
+        // -------------------------------------------------------------------
+        // State updates
+        // -------------------------------------------------------------------
+
+        for (uint256 i = 0; i < versionList.length; i++) {
+            // distribute tokens to Champions
+            offeredTokens[versionList[i]][tokenList[i]] += amountList[i];
+        }
+
+        // -------------------------------------------------------------------
+        // Effects
+        // -------------------------------------------------------------------
+
+        for (uint256 i = 0; i < versionList.length; i++) {
+            // transfer tokens from sender
+            tokenList[i].safeTransferFrom(msg.sender, address(this), amountList[i]);
+
+            emit Offer(msg.sender, tokenList[i], amountList[i]);
+        }
+    }
+
     /// @notice A Champion or the owner of a Champion may call this to claim their share of the tokens offered to this Shrine.
     /// Requires a Merkle proof to prove that the Champion is part of this Shrine's Merkle tree.
     /// Only callable by the champion (if the right was never transferred) or the owner
