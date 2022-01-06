@@ -19,6 +19,9 @@ pragma solidity ^0.8.11;
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {Shrine} from "./Shrine.sol";
 
+/// @title ShrineFactory
+/// @author zefram.eth
+/// @notice Clone factory contract for deploying Shrines
 contract ShrineFactory {
     using Clones for address;
 

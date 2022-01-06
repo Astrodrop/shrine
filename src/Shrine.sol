@@ -25,6 +25,7 @@ import {Ownable} from "./lib/Ownable.sol";
 import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
 /// @title Shrine
+/// @author zefram.eth
 /// @notice A Shrine maintains a list of Champions with individual weights (shares), and anyone could
 /// offer any ERC-20 tokens to the Shrine in order to distribute them to the Champions proportional to their
 /// shares. A Champion transfer their right to claim all future tokens offered to
