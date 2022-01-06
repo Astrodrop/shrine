@@ -22,7 +22,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Ownable} from "./lib/Ownable.sol";
-import {Initializable} from "./lib/Initializable.sol";
 import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
 /// @title Shrine
@@ -30,7 +29,8 @@ import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 /// offer any ERC-20 tokens to the Shrine in order to distribute them to the Champions proportional to their
 /// shares. A Champion transfer their right to claim all future tokens offered to
 /// the Champion to another address.
-contract Shrine is Ownable, ReentrancyGuard, Initializable {
+contract Shrine is Ownable, ReentrancyGuard {
+    error Shrine_AlreadyInitialized();
     error Shrine_InputArraysLengthMismatch();
     error Shrine_NotAuthorized();
     error Shrine_InvalidMerkleProof();
@@ -51,15 +51,16 @@ contract Shrine is Ownable, ReentrancyGuard, Initializable {
     event TransferChampionStatus(Champion indexed champion, address recipient);
     event UpdateLedger(
         Version indexed newVersion,
-        bytes32 merkleRoot,
-        uint256 totalShares,
-        string ipfsHash
+        Ledger newLedger
+    );
+    event UpdateLedgerMetadata(
+        Version indexed version,
+        string newLedgerMetadataIPFSHash
     );
 
     struct Ledger {
         bytes32 merkleRoot;
         uint256 totalShares;
-        string ipfsHash;
     }
 
     /// @notice The current version of the ledger, starting from 1
@@ -78,16 +79,29 @@ contract Shrine is Ownable, ReentrancyGuard, Initializable {
     /// @notice champion => address
     mapping(Champion => address) public championClaimRightOwner;
 
-    function initialize(address initialGuardian, Ledger calldata initialLedger)
+    function initialize(
+        address initialGuardian,
+        Ledger calldata initialLedger,
+        string calldata initialLedgerMetadataIPFSHash
+    )
         external
-        initializer
     {
+        // we use currentLedgerVersion as a flag for whether the Shrine
+        // has already been initialized
+        if (Version.unwrap(currentLedgerVersion) != 0) {
+            revert Shrine_AlreadyInitialized();
+        }
+
         __ReentrancyGuard_init();
         __Ownable_init(initialGuardian);
 
         // the version number start at 1
         currentLedgerVersion = Version.wrap(1);
         ledgerOfVersion[Version.wrap(1)] = initialLedger;
+
+        // emit event to let indexers pick up ledger & metadata IPFS hash
+        emit UpdateLedger(Version.wrap(1), initialLedger);
+        emit UpdateLedgerMetadata(Version.wrap(1), initialLedgerMetadataIPFSHash);
     }
 
     /**
@@ -396,8 +410,9 @@ contract Shrine is Ownable, ReentrancyGuard, Initializable {
                                                                                                     
      */
 
-    /// @notice The Guardian may call this function to update the Merkle tree.
-    /// @param newLedger The new Merkle tree to use for the list of Champions and their shares
+    /// @notice The Guardian may call this function to update the ledger, so that the list of
+    /// champions and the associated weights are updated.
+    /// @param newLedger The new Merkle tree to use for the list of champions and their shares
     function updateLedger(Ledger calldata newLedger)
         external
         onlyOwner
@@ -410,10 +425,19 @@ contract Shrine is Ownable, ReentrancyGuard, Initializable {
 
         emit UpdateLedger(
             newVersion,
-            newLedger.merkleRoot,
-            newLedger.totalShares,
-            newLedger.ipfsHash
+            newLedger
         );
+    }
+
+    /// @notice The Guardian may call this function to update the ledger metadata IPFS hash.
+    /// @dev This function simply emits the IPFS hash in an event, so that an off-chain indexer
+    /// can pick it up.
+    /// @param newLedgerMetadataIPFSHash The IPFS hash of the updated metadata
+    function updateLedgerMetadata(Version version, string calldata newLedgerMetadataIPFSHash)
+        external
+        onlyOwner
+    {
+        emit UpdateLedgerMetadata(version, newLedgerMetadataIPFSHash);
     }
 
     /**

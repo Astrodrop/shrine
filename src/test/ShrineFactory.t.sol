@@ -19,9 +19,9 @@ contract ShrineFactoryTest is DSTest {
             address(this),
             Shrine.Ledger({
                 merkleRoot: 0x805c7069af26b020f439d4153b0828b0c848f2f023dff7254dd2df228e27b65d,
-                totalShares: 1e27,
-                ipfsHash: "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC"
-            })
+                totalShares: 1e27
+            }),
+            "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC"
         );
     }
 }

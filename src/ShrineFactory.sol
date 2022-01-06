@@ -25,8 +25,7 @@ contract ShrineFactory {
     event CreateShrine(
         address indexed creator,
         address indexed guardian,
-        Shrine indexed shrine,
-        Shrine.Ledger ledger
+        Shrine indexed shrine
     );
 
     /// @notice The Shrine template contract used by the minimal proxies
@@ -39,15 +38,17 @@ contract ShrineFactory {
     /// @notice Creates a Shrine given an initial ledger with the distribution shares.
     /// @param guardian The Shrine's initial guardian, who controls the ledger
     /// @param ledger The Shrine's initial ledger with the distribution shares
-    function createShrine(address guardian, Shrine.Ledger calldata ledger)
-        external
-        returns (Shrine shrine)
-    {
+    /// @param ledgerMetadataIPFSHash The IPFS hash of the initial metadata
+    function createShrine(
+        address guardian,
+        Shrine.Ledger calldata ledger,
+        string calldata ledgerMetadataIPFSHash
+    ) external returns (Shrine shrine) {
         shrine = Shrine(address(shrineTemplate).clone());
 
-        shrine.initialize(guardian, ledger);
+        shrine.initialize(guardian, ledger, ledgerMetadataIPFSHash);
 
-        emit CreateShrine(msg.sender, guardian, shrine, ledger);
+        emit CreateShrine(msg.sender, guardian, shrine);
     }
 
     /// @notice Creates a Shrine given an initial ledger with the distribution shares.
@@ -55,16 +56,18 @@ contract ShrineFactory {
     /// using predictAddress().
     /// @param guardian The Shrine's initial guardian, who controls the ledger
     /// @param ledger The Shrine's initial ledger with the distribution shares
+    /// @param ledgerMetadataIPFSHash The IPFS hash of the initial metadata
     function createShrineDeterministic(
         address guardian,
         Shrine.Ledger calldata ledger,
+        string calldata ledgerMetadataIPFSHash,
         bytes32 salt
     ) external returns (Shrine shrine) {
         shrine = Shrine(address(shrineTemplate).cloneDeterministic(salt));
 
-        shrine.initialize(guardian, ledger);
+        shrine.initialize(guardian, ledger, ledgerMetadataIPFSHash);
 
-        emit CreateShrine(msg.sender, guardian, shrine, ledger);
+        emit CreateShrine(msg.sender, guardian, shrine);
     }
 
     /// @notice Predicts the address of a Shrine deployed using CREATE2, given the salt value.
