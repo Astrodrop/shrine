@@ -34,6 +34,7 @@ contract Shrine is Ownable, ReentrancyGuard {
     error Shrine_InputArraysLengthMismatch();
     error Shrine_NotAuthorized();
     error Shrine_InvalidMerkleProof();
+    error Shrine_LedgerZeroTotalShares();
 
     type Champion is address;
     type Version is uint256;
@@ -96,8 +97,12 @@ contract Shrine is Ownable, ReentrancyGuard {
             revert Shrine_AlreadyInitialized();
         }
 
+        // 0 total shares makes no sense
+        if (initialLedger.totalShares == 0) revert Shrine_LedgerZeroTotalShares();
+
         __ReentrancyGuard_init();
         __Ownable_init(initialGuardian);
+
 
         // the version number start at 1
         currentLedgerVersion = Version.wrap(1);
@@ -430,6 +435,9 @@ contract Shrine is Ownable, ReentrancyGuard {
         external
         onlyOwner
     {
+        // 0 total shares makes no sense
+        if (newLedger.totalShares == 0) revert Shrine_LedgerZeroTotalShares();
+
         Version newVersion = Version.wrap(
             Version.unwrap(currentLedgerVersion) + 1
         );
