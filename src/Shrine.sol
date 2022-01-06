@@ -30,6 +30,10 @@ import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 /// shares. A Champion transfer their right to claim all future tokens offered to
 /// the Champion to another address.
 contract Shrine is Ownable, ReentrancyGuard {
+    error Shrine_InputArraysLengthMismatch();
+    error Shrine_NotAuthorized();
+    error Shrine_InvalidMerkleProof();
+
     type Champion is address;
     type Version is uint256;
 
@@ -149,13 +153,14 @@ contract Shrine is Ownable, ReentrancyGuard {
         // Validation
         // -------------------------------------------------------------------
 
-        require(
-            versionList.length == tokenList.length &&
-                versionList.length == championList.length &&
-                versionList.length == sharesList.length &&
-                versionList.length == merkleProofList.length,
-            "Shrine: OFF"
-        );
+        if (
+            versionList.length != tokenList.length ||
+            versionList.length != championList.length ||
+            versionList.length != sharesList.length ||
+            versionList.length != merkleProofList.length
+        ) {
+            revert Shrine_InputArraysLengthMismatch();
+        }
 
         // -------------------------------------------------------------------
         // Effects
@@ -271,12 +276,13 @@ contract Shrine is Ownable, ReentrancyGuard {
         // Validation
         // -------------------------------------------------------------------
 
-        require(
-            versionList.length == tokenList.length &&
-                versionList.length == sharesList.length &&
-                versionList.length == merkleProofList.length,
-            "Shrine: OFF"
-        );
+        if (
+            versionList.length != tokenList.length ||
+            versionList.length != sharesList.length ||
+            versionList.length != merkleProofList.length
+        ) {
+            revert Shrine_InputArraysLengthMismatch();
+        }
 
         // claim and distribute tokens
         claimedTokenAmountList = new uint256[](versionList.length);
@@ -428,13 +434,10 @@ contract Shrine is Ownable, ReentrancyGuard {
             ];
             if (_championClaimRightOwner == address(0)) {
                 // claim right not transferred, sender should be the champion
-                require(
-                    msg.sender == Champion.unwrap(champion),
-                    "Shrine: WHO?"
-                );
+                if (msg.sender != Champion.unwrap(champion)) revert Shrine_NotAuthorized();
             } else {
                 // claim right transferred, sender should be the owner
-                require(msg.sender == _championClaimRightOwner, "Shrine: WHO?");
+                if (msg.sender != _championClaimRightOwner) revert Shrine_NotAuthorized();
             }
         }
     }
@@ -450,14 +453,15 @@ contract Shrine is Ownable, ReentrancyGuard {
         uint256 shares,
         bytes32[] calldata merkleProof
     ) internal view {
-        require(
-            MerkleProof.verify(
+        if (
+            !MerkleProof.verify(
                 merkleProof,
                 ledgerOfVersion[version].merkleRoot,
                 keccak256(abi.encodePacked(champion, shares))
-            ),
-            "Shrine: BAD_PROOF"
-        );
+            )
+        ) {
+            revert Shrine_InvalidMerkleProof();
+        }
     }
 
     /// @dev See {claim}
