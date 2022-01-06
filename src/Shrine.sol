@@ -346,8 +346,8 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// make sure the new owner is a trusted party.
     /// Only callable by the champion (if the right was never transferred) or the owner
     /// (that the original champion transferred their rights to)
-    /// @notice champion The champion whose claim rights will be transferred away
-    /// @notice newOwner The address that will receive all rights of the champion
+    /// @param champion The champion whose claim rights will be transferred away
+    /// @param newOwner The address that will receive all rights of the champion
     function transferChampionClaimRight(Champion champion, address newOwner)
         external
     {
@@ -382,6 +382,7 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// @param token The ERC-20 token to be claimed
     /// @param champion The Champion address
     /// @param shares The share amount of the Champion
+    /// @return claimableTokenAmount The amount of tokens claimable
     function computeClaimableTokenAmount(
         Version version,
         ERC20 token,
@@ -400,10 +401,14 @@ contract Shrine is Ownable, ReentrancyGuard {
     }
 
     /// @notice The Shrine Guardian's address (same as the contract owner)
+    /// @return The Guardian's address
     function guardian() external view returns (address) {
         return owner();
     }
 
+    /// @notice The ledger at a particular version
+    /// @param version The version of the ledger to query
+    /// @return The ledger at the specified version
     function getLedgerOfVersion(Version version) external view returns (Ledger memory) {
         return ledgerOfVersion[version];
     }
