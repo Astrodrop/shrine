@@ -14,14 +14,90 @@ contract ShrineFactoryTest is DSTest {
         factory = new ShrineFactory(template);
     }
 
-    function test_createShrine() public {
+    /// -------------------------------------------------------------------
+    /// Gas benchmarking
+    /// -------------------------------------------------------------------
+
+    function testGas_createShrine(
+        address guardian,
+        Shrine.Ledger calldata ledger
+    ) public {
         factory.createShrine(
-            address(this),
-            Shrine.Ledger({
-                merkleRoot: 0x805c7069af26b020f439d4153b0828b0c848f2f023dff7254dd2df228e27b65d,
-                totalShares: 1e27
-            }),
+            guardian,
+            ledger,
             "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC"
         );
+    }
+
+    function testGas_createShrineDeterministic(
+        address guardian,
+        Shrine.Ledger calldata ledger,
+        bytes32 salt
+    ) public {
+        factory.createShrineDeterministic(
+            guardian,
+            ledger,
+            "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC",
+            salt
+        );
+    }
+
+    function testGas_predictAddress(bytes32 salt) public view {
+        factory.predictAddress(salt);
+    }
+
+    /// -------------------------------------------------------------------
+    /// Correctness tests
+    /// -------------------------------------------------------------------
+
+    function testCorrectness_createShrine(
+        address guardian,
+        Shrine.Ledger calldata ledger
+    ) public {
+        Shrine shrine = factory.createShrine(
+            guardian,
+            ledger,
+            "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC"
+        );
+        assertEq(shrine.guardian(), guardian);
+        Shrine.Ledger memory storedLedger = shrine.getLedgerOfVersion(
+            Shrine.Version.wrap(1)
+        );
+        assertEq(storedLedger.merkleRoot, ledger.merkleRoot);
+        assertEq(storedLedger.totalShares, ledger.totalShares);
+    }
+
+    function testCorrectness_createShrineDeterministic(
+        address guardian,
+        Shrine.Ledger calldata ledger,
+        bytes32 salt
+    ) public {
+        Shrine shrine = factory.createShrineDeterministic(
+            guardian,
+            ledger,
+            "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC",
+            salt
+        );
+        assertEq(shrine.guardian(), guardian);
+        Shrine.Ledger memory storedLedger = shrine.getLedgerOfVersion(
+            Shrine.Version.wrap(1)
+        );
+        assertEq(storedLedger.merkleRoot, ledger.merkleRoot);
+        assertEq(storedLedger.totalShares, ledger.totalShares);
+    }
+
+    function testCorrectness_predictAddress(
+        address guardian,
+        Shrine.Ledger calldata ledger,
+        bytes32 salt
+    ) public {
+        Shrine shrine = factory.createShrineDeterministic(
+            guardian,
+            ledger,
+            "QmaCiEF9RzXrFGVoKtLFUrK6MUhUFgEm1dxpxoqDRFzENC",
+            salt
+        );
+        address predictedAddress = factory.predictAddress(salt);
+        assertEq(predictedAddress, address(shrine));
     }
 }

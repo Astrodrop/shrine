@@ -1,2 +1,7 @@
-test_createShrine() (gas: 167301)
 testExample() (gas: 254)
+testCorrectness_createShrine(address,(bytes32,uint256)) (runs: 256, μ: 173886, ~: 173890)
+testCorrectness_createShrineDeterministic(address,(bytes32,uint256),bytes32) (runs: 256, μ: 174899, ~: 174906)
+testCorrectness_predictAddress(address,(bytes32,uint256),bytes32) (runs: 256, μ: 172546, ~: 172553)
+testGas_createShrine(address,(bytes32,uint256)) (runs: 256, μ: 169510, ~: 169514)
+testGas_createShrineDeterministic(address,(bytes32,uint256),bytes32) (runs: 256, μ: 170565, ~: 170572)
+testGas_predictAddress(bytes32) (runs: 256, μ: 2884, ~: 2886)

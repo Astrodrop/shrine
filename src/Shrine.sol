@@ -404,6 +404,10 @@ contract Shrine is Ownable, ReentrancyGuard {
         return owner();
     }
 
+    function getLedgerOfVersion(Version version) external view returns (Ledger memory) {
+        return ledgerOfVersion[version];
+    }
+
     /**
                                                                                                     
                 ____  _   ______  __   ________  _____    ____  ____  _______    _   __             
