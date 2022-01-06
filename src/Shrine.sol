@@ -79,6 +79,10 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// @notice champion => address
     mapping(Champion => address) public championClaimRightOwner;
 
+    /// @notice Initialize the Shrine contract.
+    /// @param initialGuardian The Shrine's initial guardian, who controls the ledger
+    /// @param initialLedger The Shrine's initial ledger with the distribution shares
+    /// @param initialLedgerMetadataIPFSHash The IPFS hash of the initial metadata
     function initialize(
         address initialGuardian,
         Ledger calldata initialLedger,
