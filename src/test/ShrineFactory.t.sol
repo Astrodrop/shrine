@@ -22,6 +22,7 @@ contract ShrineFactoryTest is DSTest {
         address guardian,
         Shrine.Ledger calldata ledger
     ) public {
+        if (ledger.totalShares == 0) return;
         factory.createShrine(
             guardian,
             ledger,
@@ -34,6 +35,7 @@ contract ShrineFactoryTest is DSTest {
         Shrine.Ledger calldata ledger,
         bytes32 salt
     ) public {
+        if (ledger.totalShares == 0) return;
         factory.createShrineDeterministic(
             guardian,
             ledger,
@@ -54,6 +56,7 @@ contract ShrineFactoryTest is DSTest {
         address guardian,
         Shrine.Ledger calldata ledger
     ) public {
+        if (ledger.totalShares == 0) return;
         Shrine shrine = factory.createShrine(
             guardian,
             ledger,
@@ -72,6 +75,7 @@ contract ShrineFactoryTest is DSTest {
         Shrine.Ledger calldata ledger,
         bytes32 salt
     ) public {
+        if (ledger.totalShares == 0) return;
         Shrine shrine = factory.createShrineDeterministic(
             guardian,
             ledger,
@@ -91,6 +95,7 @@ contract ShrineFactoryTest is DSTest {
         Shrine.Ledger calldata ledger,
         bytes32 salt
     ) public {
+        if (ledger.totalShares == 0) return;
         Shrine shrine = factory.createShrineDeterministic(
             guardian,
             ledger,
