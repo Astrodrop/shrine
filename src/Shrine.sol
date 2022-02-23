@@ -31,16 +31,32 @@ import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 /// shares. A Champion transfer their right to claim all future tokens offered to
 /// the Champion to another address.
 contract Shrine is Ownable, ReentrancyGuard {
+    /// -----------------------------------------------------------------------
+    /// Errors
+    /// -----------------------------------------------------------------------
+
     error Shrine_AlreadyInitialized();
     error Shrine_InputArraysLengthMismatch();
     error Shrine_NotAuthorized();
     error Shrine_InvalidMerkleProof();
     error Shrine_LedgerZeroTotalShares();
 
+    /// -----------------------------------------------------------------------
+    /// Custom types
+    /// -----------------------------------------------------------------------
+
     type Champion is address;
     type Version is uint256;
 
+    /// -----------------------------------------------------------------------
+    /// Library usage
+    /// -----------------------------------------------------------------------
+
     using SafeTransferLib for ERC20;
+
+    /// -----------------------------------------------------------------------
+    /// Events
+    /// -----------------------------------------------------------------------
 
     event Offer(address indexed sender, ERC20 indexed token, uint256 amount);
     event Claim(
@@ -51,14 +67,15 @@ contract Shrine is Ownable, ReentrancyGuard {
     );
     event ClaimFromMetaShrine(Shrine indexed metaShrine);
     event TransferChampionStatus(Champion indexed champion, address recipient);
-    event UpdateLedger(
-        Version indexed newVersion,
-        Ledger newLedger
-    );
+    event UpdateLedger(Version indexed newVersion, Ledger newLedger);
     event UpdateLedgerMetadata(
         Version indexed version,
         string newLedgerMetadataIPFSHash
     );
+
+    /// -----------------------------------------------------------------------
+    /// Storage variables
+    /// -----------------------------------------------------------------------
 
     struct Ledger {
         bytes32 merkleRoot;
@@ -81,6 +98,10 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// @notice champion => address
     mapping(Champion => address) public championClaimRightOwner;
 
+    /// -----------------------------------------------------------------------
+    /// Initialization
+    /// -----------------------------------------------------------------------
+
     /// @notice Initialize the Shrine contract.
     /// @param initialGuardian The Shrine's initial guardian, who controls the ledger
     /// @param initialLedger The Shrine's initial ledger with the distribution shares
@@ -89,9 +110,7 @@ contract Shrine is Ownable, ReentrancyGuard {
         address initialGuardian,
         Ledger calldata initialLedger,
         string calldata initialLedgerMetadataIPFSHash
-    )
-        external
-    {
+    ) external {
         // we use currentLedgerVersion as a flag for whether the Shrine
         // has already been initialized
         if (Version.unwrap(currentLedgerVersion) != 0) {
@@ -99,11 +118,11 @@ contract Shrine is Ownable, ReentrancyGuard {
         }
 
         // 0 total shares makes no sense
-        if (initialLedger.totalShares == 0) revert Shrine_LedgerZeroTotalShares();
+        if (initialLedger.totalShares == 0)
+            revert Shrine_LedgerZeroTotalShares();
 
         __ReentrancyGuard_init();
         __Ownable_init(initialGuardian);
-
 
         // the version number start at 1
         currentLedgerVersion = Version.wrap(1);
@@ -111,18 +130,15 @@ contract Shrine is Ownable, ReentrancyGuard {
 
         // emit event to let indexers pick up ledger & metadata IPFS hash
         emit UpdateLedger(Version.wrap(1), initialLedger);
-        emit UpdateLedgerMetadata(Version.wrap(1), initialLedgerMetadataIPFSHash);
+        emit UpdateLedgerMetadata(
+            Version.wrap(1),
+            initialLedgerMetadataIPFSHash
+        );
     }
 
-    /**
-                                                                                                    
-                                 ___   ____________________  _   _______                            
-                                /   | / ____/_  __/  _/ __ \/ | / / ___/                            
-                               / /| |/ /     / /  / // / / /  |/ /\__ \                             
-                              / ___ / /___  / / _/ // /_/ / /|  /___/ /                             
-                             /_/  |_\____/ /_/ /___/\____/_/ |_//____/                              
-                                                                                                    
-     */
+    /// -----------------------------------------------------------------------
+    /// User actions
+    /// -----------------------------------------------------------------------
 
     /// @notice Offer ERC-20 tokens to the Shrine and distribute them to Champions proportional
     /// to their shares in the Shrine. Callable by anyone.
@@ -182,7 +198,11 @@ contract Shrine is Ownable, ReentrancyGuard {
 
         for (uint256 i = 0; i < versionList.length; i++) {
             // transfer tokens from sender
-            tokenList[i].safeTransferFrom(msg.sender, address(this), amountList[i]);
+            tokenList[i].safeTransferFrom(
+                msg.sender,
+                address(this),
+                amountList[i]
+            );
 
             emit Offer(msg.sender, tokenList[i], amountList[i]);
         }
@@ -414,15 +434,9 @@ contract Shrine is Ownable, ReentrancyGuard {
         emit TransferChampionStatus(champion, newOwner);
     }
 
-    /**
-                                                                                                    
-                               __________________________________  _____                            
-                              / ____/ ____/_  __/_  __/ ____/ __ \/ ___/                            
-                             / / __/ __/   / /   / / / __/ / /_/ /\__ \                             
-                            / /_/ / /___  / /   / / / /___/ _, _/___/ /                             
-                            \____/_____/ /_/   /_/ /_____/_/ |_|/____/                              
-                                                                                                    
-    */
+    /// -----------------------------------------------------------------------
+    /// Getters
+    /// -----------------------------------------------------------------------
 
     /// @notice Computes the amount of a particular ERC-20 token claimable by a Champion from
     /// a particular version of the Merkle tree.
@@ -457,27 +471,22 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// @notice The ledger at a particular version
     /// @param version The version of the ledger to query
     /// @return The ledger at the specified version
-    function getLedgerOfVersion(Version version) external view returns (Ledger memory) {
+    function getLedgerOfVersion(Version version)
+        external
+        view
+        returns (Ledger memory)
+    {
         return ledgerOfVersion[version];
     }
 
-    /**
-                                                                                                    
-                ____  _   ______  __   ________  _____    ____  ____  _______    _   __             
-               / __ \/ | / / /\ \/ /  / ____/ / / /   |  / __ \/ __ \/  _/   |  / | / /             
-              / / / /  |/ / /  \  /  / / __/ / / / /| | / /_/ / / / // // /| | /  |/ /              
-             / /_/ / /|  / /___/ /  / /_/ / /_/ / ___ |/ _, _/ /_/ // // ___ |/ /|  /               
-             \____/_/ |_/_____/_/   \____/\____/_/  |_/_/ |_/_____/___/_/  |_/_/ |_/                
-                                                                                                    
-     */
+    /// -----------------------------------------------------------------------
+    /// Guardian actions
+    /// -----------------------------------------------------------------------
 
     /// @notice The Guardian may call this function to update the ledger, so that the list of
     /// champions and the associated weights are updated.
     /// @param newLedger The new Merkle tree to use for the list of champions and their shares
-    function updateLedger(Ledger calldata newLedger)
-        external
-        onlyOwner
-    {
+    function updateLedger(Ledger calldata newLedger) external onlyOwner {
         // 0 total shares makes no sense
         if (newLedger.totalShares == 0) revert Shrine_LedgerZeroTotalShares();
 
@@ -487,32 +496,23 @@ contract Shrine is Ownable, ReentrancyGuard {
         currentLedgerVersion = newVersion;
         ledgerOfVersion[newVersion] = newLedger;
 
-        emit UpdateLedger(
-            newVersion,
-            newLedger
-        );
+        emit UpdateLedger(newVersion, newLedger);
     }
 
     /// @notice The Guardian may call this function to update the ledger metadata IPFS hash.
     /// @dev This function simply emits the IPFS hash in an event, so that an off-chain indexer
     /// can pick it up.
     /// @param newLedgerMetadataIPFSHash The IPFS hash of the updated metadata
-    function updateLedgerMetadata(Version version, string calldata newLedgerMetadataIPFSHash)
-        external
-        onlyOwner
-    {
+    function updateLedgerMetadata(
+        Version version,
+        string calldata newLedgerMetadataIPFSHash
+    ) external onlyOwner {
         emit UpdateLedgerMetadata(version, newLedgerMetadataIPFSHash);
     }
 
-    /**
-                                                                                                    
-                           _____   __________________  _   _____    __   _____                      
-                          /  _/ | / /_  __/ ____/ __ \/ | / /   |  / /  / ___/                      
-                          / //  |/ / / / / __/ / /_/ /  |/ / /| | / /   \__ \                       
-                        _/ // /|  / / / / /___/ _, _/ /|  / ___ |/ /______/ /                       
-                       /___/_/ |_/ /_/ /_____/_/ |_/_/ |_/_/  |_/_____/____/                        
-                                                                                                    
-     */
+    /// -----------------------------------------------------------------------
+    /// Internal utilities
+    /// -----------------------------------------------------------------------
 
     /// @dev Reverts if the sender isn't the champion or does not own the champion claim right
     /// @param champion The champion whose ownership will be verified
@@ -523,10 +523,12 @@ contract Shrine is Ownable, ReentrancyGuard {
             ];
             if (_championClaimRightOwner == address(0)) {
                 // claim right not transferred, sender should be the champion
-                if (msg.sender != Champion.unwrap(champion)) revert Shrine_NotAuthorized();
+                if (msg.sender != Champion.unwrap(champion))
+                    revert Shrine_NotAuthorized();
             } else {
                 // claim right transferred, sender should be the owner
-                if (msg.sender != _championClaimRightOwner) revert Shrine_NotAuthorized();
+                if (msg.sender != _championClaimRightOwner)
+                    revert Shrine_NotAuthorized();
             }
         }
     }
