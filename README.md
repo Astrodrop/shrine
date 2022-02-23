@@ -6,18 +6,38 @@ The admin of a shrine is called the **guardian**. Each guardian can modify their
 
 Each address on a shrine’s ledger is called a **champion** of that shrine. Each champion can transfer their right to claim tokens from a certain shrine to another address.
 
+## Installation
+
+To install with [DappTools](https://github.com/dapphub/dapptools):
+
+```
+dapp install astrodrop/shrine
+```
+
+To install with [Foundry](https://github.com/gakonst/foundry):
+
+```
+forge install astrodrop/shrine
+```
+
 ## Local development
 
-Astrodrop Shrines uses [Foundry](https://github.com/gakonst/foundry) as the development framework.
+This project uses [Foundry](https://github.com/gakonst/foundry) as the development framework.
+
+### Dependencies
+
+```
+make update
+```
 
 ### Compilation
 
 ```
-forge build
+make build
 ```
 
 ### Testing
 
 ```
-forge test
+make test
 ```
