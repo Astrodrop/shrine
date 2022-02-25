@@ -62,13 +62,14 @@ contract ShrineTest is DSTest, MerkleTreeGenerator {
     }
 
     function testGas_claim() public {
-        exampleShrine.claim(
-            Shrine.Version.wrap(1),
-            exampleToken,
-            Shrine.Champion.wrap(address(this)),
-            EXAMPLE_USER_SHARES,
-            exampleProof
-        );
+        Shrine.ClaimInfo memory claimInfo = Shrine.ClaimInfo({
+            version: Shrine.Version.wrap(1),
+            token: exampleToken,
+            champion: Shrine.Champion.wrap(address(this)),
+            shares: EXAMPLE_USER_SHARES,
+            merkleProof: exampleProof
+        });
+        exampleShrine.claim(address(this), claimInfo);
     }
 
     /// -------------------------------------------------------------------
@@ -106,13 +107,163 @@ contract ShrineTest is DSTest, MerkleTreeGenerator {
         shrine.offer(testToken, offerAmount);
 
         // claim tokens
-        uint256 claimedTokenAmount = shrine.claim(
+        Shrine.ClaimInfo memory claimInfo = Shrine.ClaimInfo({
+            version: Shrine.Version.wrap(1),
+            token: testToken,
+            champion: Shrine.Champion.wrap(address(this)),
+            shares: userShareAmount,
+            merkleProof: proof
+        });
+        uint256 claimedTokenAmount = shrine.claim(address(this), claimInfo);
+
+        // verify tokens claimed
+        assertEq(testToken.balanceOf(address(this)), offerAmount);
+        assertEq(claimedTokenAmount, offerAmount);
+
+        // try claiming again
+        claimedTokenAmount = shrine.claim(address(this), claimInfo);
+
+        // verify tokens claimed
+        assertEq(testToken.balanceOf(address(this)), offerAmount);
+        assertEq(claimedTokenAmount, 0);
+    }
+
+    function testCorrectness_offerAndClaimMultipleTokensForChampion(
+        uint128[] calldata offerAmountList,
+        uint128 userShareAmount,
+        uint8 treeHeightMinusOne,
+        bytes32 randomness
+    ) public {
+        if (offerAmountList.length == 0) return;
+        if (treeHeightMinusOne == 0) treeHeightMinusOne = 1;
+        if (userShareAmount == 0) userShareAmount = 1;
+
+        // setup
+        (bytes32 root, bytes32[] memory proof) = generateMerkleTree(
+            keccak256(
+                abi.encodePacked(address(this), uint256(userShareAmount))
+            ),
+            treeHeightMinusOne,
+            randomness
+        );
+        Shrine shrine = factory.createShrine(
+            address(this),
+            Shrine.Ledger({merkleRoot: root, totalShares: userShareAmount}),
+            ""
+        );
+        ERC20[] memory testTokenList = new ERC20[](offerAmountList.length);
+        for (uint256 i = 0; i < offerAmountList.length; i++) {
+            MockERC20 testToken = new MockERC20("Test Token", "TOK", 18);
+            testTokenList[i] = ERC20(address(testToken));
+
+            // mint and offer tokens
+            testToken.mint(offerAmountList[i]);
+            testTokenList[i].approve(address(shrine), offerAmountList[i]);
+            shrine.offer(testTokenList[i], offerAmountList[i]);
+        }
+
+        // claim tokens
+        uint256[] memory claimedTokenAmountList = shrine
+            .claimMultipleTokensForChampion(
+                address(this),
+                Shrine.Version.wrap(1),
+                testTokenList,
+                Shrine.Champion.wrap(address(this)),
+                userShareAmount,
+                proof
+            );
+
+        // verify tokens claimed
+        for (uint256 i = 0; i < offerAmountList.length; i++) {
+            assertEq(
+                testTokenList[i].balanceOf(address(this)),
+                offerAmountList[i]
+            );
+            assertEq(claimedTokenAmountList[i], offerAmountList[i]);
+        }
+
+        // try claiming again
+        claimedTokenAmountList = shrine.claimMultipleTokensForChampion(
+            address(this),
             Shrine.Version.wrap(1),
-            testToken,
+            testTokenList,
             Shrine.Champion.wrap(address(this)),
             userShareAmount,
             proof
         );
+
+        // verify tokens claimed
+        for (uint256 i = 0; i < offerAmountList.length; i++) {
+            assertEq(
+                testTokenList[i].balanceOf(address(this)),
+                offerAmountList[i]
+            );
+            assertEq(claimedTokenAmountList[i], 0);
+        }
+    }
+
+    function testCorrectness_offerAndClaimFromMetaShrine(
+        uint128 offerAmount,
+        uint128 userShareAmount,
+        uint8 treeHeightMinusOne,
+        bytes32 randomness
+    ) public {
+        if (offerAmount == 0) offerAmount = 1;
+        if (treeHeightMinusOne == 0) treeHeightMinusOne = 1;
+        if (userShareAmount == 0) userShareAmount = 1;
+
+        // setup
+        (bytes32 root, bytes32[] memory proof) = generateMerkleTree(
+            keccak256(
+                abi.encodePacked(address(this), uint256(userShareAmount))
+            ),
+            treeHeightMinusOne,
+            randomness
+        );
+        Shrine shrine = factory.createShrine(
+            address(this),
+            Shrine.Ledger({merkleRoot: root, totalShares: userShareAmount}),
+            ""
+        );
+        (bytes32 metaRoot, bytes32[] memory metaProof) = generateMerkleTree(
+            keccak256(
+                abi.encodePacked(address(shrine), uint256(userShareAmount))
+            ),
+            treeHeightMinusOne,
+            randomness
+        );
+        Shrine metaShrine = factory.createShrine(
+            address(this),
+            Shrine.Ledger({merkleRoot: metaRoot, totalShares: userShareAmount}),
+            ""
+        );
+        MockERC20 testToken = new MockERC20("Test Token", "TOK", 18);
+
+        // mint and offer tokens to meta shrine
+        testToken.mint(offerAmount);
+        testToken.approve(address(metaShrine), offerAmount);
+        metaShrine.offer(testToken, offerAmount);
+
+        // claim tokens from meta shrine to shrine
+        Shrine.MetaShrineClaimInfo memory metaClaimInfo = Shrine
+            .MetaShrineClaimInfo({
+                metaShrine: metaShrine,
+                version: Shrine.Version.wrap(1),
+                token: testToken,
+                shares: userShareAmount,
+                merkleProof: metaProof
+            });
+        shrine.claimFromMetaShrine(metaClaimInfo);
+
+        // claim tokens from shrine
+        Shrine.ClaimInfo memory claimInfo = Shrine.ClaimInfo({
+            version: Shrine.Version.wrap(1),
+            token: testToken,
+            champion: Shrine.Champion.wrap(address(this)),
+            shares: userShareAmount,
+            merkleProof: proof
+        });
+        uint256 claimedTokenAmount = shrine.claim(address(this), claimInfo);
 
         // verify tokens claimed
         assertEq(testToken.balanceOf(address(this)), offerAmount);

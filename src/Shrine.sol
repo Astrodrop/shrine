@@ -60,6 +60,7 @@ contract Shrine is Ownable, ReentrancyGuard {
 
     event Offer(address indexed sender, ERC20 indexed token, uint256 amount);
     event Claim(
+        address recipient,
         Version indexed version,
         ERC20 indexed token,
         Champion indexed champion,
@@ -74,13 +75,43 @@ contract Shrine is Ownable, ReentrancyGuard {
     );
 
     /// -----------------------------------------------------------------------
-    /// Storage variables
+    /// Structs
     /// -----------------------------------------------------------------------
+
+    /// @param version The Merkle tree version
+    /// @param token The ERC-20 token to be claimed
+    /// @param champion The Champion address. If the Champion rights have been transferred, the tokens will be sent to its owner.
+    /// @param shares The share amount of the Champion
+    /// @param merkleProof The Merkle proof showing the Champion is part of this Shrine's Merkle tree
+    struct ClaimInfo {
+        Version version;
+        ERC20 token;
+        Champion champion;
+        uint256 shares;
+        bytes32[] merkleProof;
+    }
+
+    /// @param metaShrine The shrine to claim from
+    /// @param version The Merkle tree version
+    /// @param token The ERC-20 token to be claimed
+    /// @param shares The share amount of the Champion
+    /// @param merkleProof The Merkle proof showing the Champion is part of this Shrine's Merkle tree
+    struct MetaShrineClaimInfo {
+        Shrine metaShrine;
+        Version version;
+        ERC20 token;
+        uint256 shares;
+        bytes32[] merkleProof;
+    }
 
     struct Ledger {
         bytes32 merkleRoot;
         uint256 totalShares;
     }
+
+    /// -----------------------------------------------------------------------
+    /// Storage variables
+    /// -----------------------------------------------------------------------
 
     /// @notice The current version of the ledger, starting from 1
     Version public currentLedgerVersion;
@@ -212,55 +243,123 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// Requires a Merkle proof to prove that the Champion is part of this Shrine's Merkle tree.
     /// Only callable by the champion (if the right was never transferred) or the owner
     /// (that the original champion transferred their rights to)
-    /// @param version The Merkle tree version
-    /// @param token The ERC-20 token to be claimed
-    /// @param champion The Champion address. If the Champion rights have been transferred, the tokens will be sent to its owner.
-    /// @param shares The share amount of the Champion
-    /// @param merkleProof The Merkle proof showing the Champion is part of this Shrine's Merkle tree
+    /// @param claimInfo The info of the claim
     /// @return claimedTokenAmount The amount of tokens claimed
-    function claim(
-        Version version,
-        ERC20 token,
-        Champion champion,
-        uint256 shares,
-        bytes32[] calldata merkleProof
-    ) external returns (uint256 claimedTokenAmount) {
-        return _claim(version, token, champion, shares, merkleProof);
-    }
-
-    /// @notice A variant of {claim} that combines multiple claims into a single call.
-    function claimMultiple(
-        Version[] calldata versionList,
-        ERC20[] calldata tokenList,
-        Champion[] calldata championList,
-        uint256[] calldata sharesList,
-        bytes32[][] calldata merkleProofList
-    ) external returns (uint256[] memory claimedTokenAmountList) {
+    function claim(address recipient, ClaimInfo calldata claimInfo)
+        external
+        returns (uint256 claimedTokenAmount)
+    {
         // -------------------------------------------------------------------
         // Validation
         // -------------------------------------------------------------------
 
-        if (
-            versionList.length != tokenList.length ||
-            versionList.length != championList.length ||
-            versionList.length != sharesList.length ||
-            versionList.length != merkleProofList.length
-        ) {
-            revert Shrine_InputArraysLengthMismatch();
-        }
+        // verify sender auth
+        _verifyChampionOwnership(claimInfo.champion);
+
+        // verify Merkle proof that the champion is part of the Merkle tree
+        _verifyMerkleProof(
+            claimInfo.version,
+            claimInfo.champion,
+            claimInfo.shares,
+            claimInfo.merkleProof
+        );
+
+        // compute claimable amount
+        uint256 championClaimedTokens = claimedTokens[claimInfo.version][
+            claimInfo.token
+        ][claimInfo.champion];
+        claimedTokenAmount = _computeClaimableTokenAmount(
+            claimInfo.version,
+            claimInfo.token,
+            claimInfo.shares,
+            championClaimedTokens
+        );
+
+        // -------------------------------------------------------------------
+        // State updates
+        // -------------------------------------------------------------------
+
+        // record total tokens claimed by the champion
+        claimedTokens[claimInfo.version][claimInfo.token][claimInfo.champion] =
+            championClaimedTokens +
+            claimedTokenAmount;
 
         // -------------------------------------------------------------------
         // Effects
         // -------------------------------------------------------------------
 
-        claimedTokenAmountList = new uint256[](versionList.length);
-        for (uint256 i = 0; i < versionList.length; i++) {
-            claimedTokenAmountList[i] = _claim(
-                versionList[i],
-                tokenList[i],
-                championList[i],
-                sharesList[i],
-                merkleProofList[i]
+        // transfer tokens to the recipient
+        claimInfo.token.safeTransfer(recipient, claimedTokenAmount);
+
+        emit Claim(
+            recipient,
+            claimInfo.version,
+            claimInfo.token,
+            claimInfo.champion,
+            claimedTokenAmount
+        );
+    }
+
+    /// @notice A variant of {claim} that combines multiple claims into a single call.
+    function claimMultiple(
+        address recipient,
+        ClaimInfo[] calldata claimInfoList
+    ) external returns (uint256[] memory claimedTokenAmountList) {
+        claimedTokenAmountList = new uint256[](claimInfoList.length);
+        for (uint256 i = 0; i < claimInfoList.length; i++) {
+            // -------------------------------------------------------------------
+            // Validation
+            // -------------------------------------------------------------------
+
+            // verify sender auth
+            _verifyChampionOwnership(claimInfoList[i].champion);
+
+            // verify Merkle proof that the champion is part of the Merkle tree
+            _verifyMerkleProof(
+                claimInfoList[i].version,
+                claimInfoList[i].champion,
+                claimInfoList[i].shares,
+                claimInfoList[i].merkleProof
+            );
+
+            // compute claimable amount
+            uint256 championClaimedTokens = claimedTokens[
+                claimInfoList[i].version
+            ][claimInfoList[i].token][claimInfoList[i].champion];
+            claimedTokenAmountList[i] = _computeClaimableTokenAmount(
+                claimInfoList[i].version,
+                claimInfoList[i].token,
+                claimInfoList[i].shares,
+                championClaimedTokens
+            );
+
+            // -------------------------------------------------------------------
+            // State updates
+            // -------------------------------------------------------------------
+
+            // record total tokens claimed by the champion
+            claimedTokens[claimInfoList[i].version][claimInfoList[i].token][
+                claimInfoList[i].champion
+            ] = championClaimedTokens + claimedTokenAmountList[i];
+        }
+
+        for (uint256 i = 0; i < claimInfoList.length; i++) {
+            // -------------------------------------------------------------------
+            // Effects
+            // -------------------------------------------------------------------
+
+            // transfer tokens to the recipient
+            claimInfoList[i].token.safeTransfer(
+                recipient,
+                claimedTokenAmountList[i]
+            );
+
+            emit Claim(
+                recipient,
+                claimInfoList[i].version,
+                claimInfoList[i].token,
+                claimInfoList[i].champion,
+                claimedTokenAmountList[i]
             );
         }
     }
@@ -268,6 +367,7 @@ contract Shrine is Ownable, ReentrancyGuard {
     /// @notice A variant of {claim} that combines multiple claims for the same Champion & version into a single call.
     /// @dev This is more efficient than {claimMultiple} since it only checks Champion ownership & verifies Merkle proof once.
     function claimMultipleTokensForChampion(
+        address recipient,
         Version version,
         ERC20[] calldata tokenList,
         Champion champion,
@@ -284,25 +384,39 @@ contract Shrine is Ownable, ReentrancyGuard {
         // verify Merkle proof that the champion is part of the Merkle tree
         _verifyMerkleProof(version, champion, shares, merkleProof);
 
-        // -------------------------------------------------------------------
-        // Effects
-        // -------------------------------------------------------------------
-
-        // transfer tokens
         claimedTokenAmountList = new uint256[](tokenList.length);
         for (uint256 i = 0; i < tokenList.length; i++) {
             // compute claimable amount
-            claimedTokenAmountList[i] = computeClaimableTokenAmount(
+            uint256 championClaimedTokens = claimedTokens[version][
+                tokenList[i]
+            ][champion];
+            claimedTokenAmountList[i] = _computeClaimableTokenAmount(
                 version,
                 tokenList[i],
-                champion,
-                shares
+                shares,
+                championClaimedTokens
             );
 
-            // transfer tokens to the sender
-            tokenList[i].safeTransfer(msg.sender, claimedTokenAmountList[i]);
+            // -------------------------------------------------------------------
+            // State updates
+            // -------------------------------------------------------------------
+
+            // record total tokens claimed by the champion
+            claimedTokens[version][tokenList[i]][champion] =
+                championClaimedTokens +
+                claimedTokenAmountList[i];
+        }
+
+        for (uint256 i = 0; i < tokenList.length; i++) {
+            // -------------------------------------------------------------------
+            // Effects
+            // -------------------------------------------------------------------
+
+            // transfer tokens to the recipient
+            tokenList[i].safeTransfer(recipient, claimedTokenAmountList[i]);
 
             emit Claim(
+                recipient,
                 version,
                 tokenList[i],
                 champion,
@@ -313,100 +427,25 @@ contract Shrine is Ownable, ReentrancyGuard {
 
     /// @notice If this Shrine is a Champion of another Shrine (MetaShrine), calling this can claim the tokens
     /// from the MetaShrine and distribute them to this Shrine's Champions. Callable by anyone.
-    /// @param version The Merkle tree version
-    /// @param token The ERC-20 token to be claimed
-    /// @param shares The share amount of the Champion
-    /// @param merkleProof The Merkle proof showing the Champion is part of this Shrine's Merkle tree
+    /// @param claimInfo The info of the claim
     /// @return claimedTokenAmount The amount of tokens claimed
-    function claimFromMetaShrine(
-        Shrine metaShrine,
-        Version version,
-        ERC20 token,
-        uint256 shares,
-        bytes32[] calldata merkleProof
-    ) external nonReentrant returns (uint256 claimedTokenAmount) {
-        // -------------------------------------------------------------------
-        // Effects
-        // -------------------------------------------------------------------
-
-        // claim tokens from the meta shrine
-        uint256 beforeBalance = token.balanceOf(address(this));
-        metaShrine.claim(
-            version,
-            token,
-            Champion.wrap(address(this)),
-            shares,
-            merkleProof
-        );
-        claimedTokenAmount = token.balanceOf(address(this)) - beforeBalance;
-
-        // -------------------------------------------------------------------
-        // State updates
-        // -------------------------------------------------------------------
-
-        // distribute tokens to Champions
-        offeredTokens[currentLedgerVersion][token] += claimedTokenAmount;
-
-        emit Offer(address(metaShrine), token, claimedTokenAmount);
-        emit ClaimFromMetaShrine(metaShrine);
+    function claimFromMetaShrine(MetaShrineClaimInfo calldata claimInfo)
+        external
+        nonReentrant
+        returns (uint256 claimedTokenAmount)
+    {
+        return _claimFromMetaShrine(claimInfo);
     }
 
     /// @notice A variant of {claimFromMetaShrine} that combines multiple claims into a single call.
     function claimMultipleFromMetaShrine(
-        Shrine metaShrine,
-        Version[] calldata versionList,
-        ERC20[] calldata tokenList,
-        uint256[] calldata sharesList,
-        bytes32[][] calldata merkleProofList
+        MetaShrineClaimInfo[] calldata claimInfoList
     ) external nonReentrant returns (uint256[] memory claimedTokenAmountList) {
-        // -------------------------------------------------------------------
-        // Validation
-        // -------------------------------------------------------------------
-
-        if (
-            versionList.length != tokenList.length ||
-            versionList.length != sharesList.length ||
-            versionList.length != merkleProofList.length
-        ) {
-            revert Shrine_InputArraysLengthMismatch();
-        }
-
         // claim and distribute tokens
-        claimedTokenAmountList = new uint256[](versionList.length);
-        for (uint256 i = 0; i < versionList.length; i++) {
-            // -------------------------------------------------------------------
-            // Effects
-            // -------------------------------------------------------------------
-
-            // claim tokens from the meta shrine
-            uint256 beforeBalance = tokenList[i].balanceOf(address(this));
-            metaShrine.claim(
-                versionList[i],
-                tokenList[i],
-                Champion.wrap(address(this)),
-                sharesList[i],
-                merkleProofList[i]
-            );
-            claimedTokenAmountList[i] =
-                tokenList[i].balanceOf(address(this)) -
-                beforeBalance;
-
-            // -------------------------------------------------------------------
-            // State updates
-            // -------------------------------------------------------------------
-
-            // distribute tokens to Champions
-            offeredTokens[currentLedgerVersion][
-                tokenList[i]
-            ] += claimedTokenAmountList[i];
-
-            emit Offer(
-                address(metaShrine),
-                tokenList[i],
-                claimedTokenAmountList[i]
-            );
+        claimedTokenAmountList = new uint256[](claimInfoList.length);
+        for (uint256 i = 0; i < claimInfoList.length; i++) {
+            claimedTokenAmountList[i] = _claimFromMetaShrine(claimInfoList[i]);
         }
-        emit ClaimFromMetaShrine(metaShrine);
     }
 
     /// @notice Allows a champion to transfer their right to claim from this shrine to
@@ -451,15 +490,13 @@ contract Shrine is Ownable, ReentrancyGuard {
         Champion champion,
         uint256 shares
     ) public view returns (uint256 claimableTokenAmount) {
-        uint256 totalShares = ledgerOfVersion[version].totalShares;
-        uint256 offeredTokenAmount = (offeredTokens[version][token] * shares) /
-            totalShares;
-        uint256 claimedTokenAmount = claimedTokens[version][token][champion];
-        // rounding may cause (offeredTokenAmount < claimedTokenAmount)
-        // don't want to revert because of it
-        claimableTokenAmount = offeredTokenAmount >= claimedTokenAmount
-            ? offeredTokenAmount - claimedTokenAmount
-            : 0;
+        return
+            _computeClaimableTokenAmount(
+                version,
+                token,
+                shares,
+                claimedTokens[version][token][champion]
+            );
     }
 
     /// @notice The Shrine Guardian's address (same as the contract owner)
@@ -555,39 +592,63 @@ contract Shrine is Ownable, ReentrancyGuard {
         }
     }
 
-    /// @dev See {claim}
-    function _claim(
+    /// @dev See {computeClaimableTokenAmount}
+    function _computeClaimableTokenAmount(
         Version version,
         ERC20 token,
-        Champion champion,
         uint256 shares,
-        bytes32[] calldata merkleProof
-    ) internal returns (uint256 claimedTokenAmount) {
-        // -------------------------------------------------------------------
-        // Validation
-        // -------------------------------------------------------------------
+        uint256 claimedTokenAmount
+    ) internal view returns (uint256 claimableTokenAmount) {
+        uint256 totalShares = ledgerOfVersion[version].totalShares;
+        uint256 offeredTokenAmount = (offeredTokens[version][token] * shares) /
+            totalShares;
 
-        // verify sender auth
-        _verifyChampionOwnership(champion);
+        // rounding may cause (offeredTokenAmount < claimedTokenAmount)
+        // don't want to revert because of it
+        claimableTokenAmount = offeredTokenAmount >= claimedTokenAmount
+            ? offeredTokenAmount - claimedTokenAmount
+            : 0;
+    }
 
-        // verify Merkle proof that the champion is part of the Merkle tree
-        _verifyMerkleProof(version, champion, shares, merkleProof);
-
-        // compute claimable amount
-        claimedTokenAmount = computeClaimableTokenAmount(
-            version,
-            token,
-            champion,
-            shares
-        );
-
+    /// @dev See {claimFromMetaShrine}
+    function _claimFromMetaShrine(MetaShrineClaimInfo calldata claimInfo)
+        internal
+        returns (uint256 claimedTokenAmount)
+    {
         // -------------------------------------------------------------------
         // Effects
         // -------------------------------------------------------------------
 
-        // transfer tokens to the sender
-        token.safeTransfer(msg.sender, claimedTokenAmount);
+        // claim tokens from the meta shrine
+        uint256 beforeBalance = claimInfo.token.balanceOf(address(this));
+        claimInfo.metaShrine.claim(
+            address(this),
+            ClaimInfo({
+                version: claimInfo.version,
+                token: claimInfo.token,
+                champion: Champion.wrap(address(this)),
+                shares: claimInfo.shares,
+                merkleProof: claimInfo.merkleProof
+            })
+        );
+        claimedTokenAmount =
+            claimInfo.token.balanceOf(address(this)) -
+            beforeBalance;
 
-        emit Claim(version, token, champion, claimedTokenAmount);
+        // -------------------------------------------------------------------
+        // State updates
+        // -------------------------------------------------------------------
+
+        // distribute tokens to Champions
+        offeredTokens[currentLedgerVersion][
+            claimInfo.token
+        ] += claimedTokenAmount;
+
+        emit Offer(
+            address(claimInfo.metaShrine),
+            claimInfo.token,
+            claimedTokenAmount
+        );
+        emit ClaimFromMetaShrine(claimInfo.metaShrine);
     }
 }
